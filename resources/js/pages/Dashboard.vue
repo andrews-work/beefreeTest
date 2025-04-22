@@ -14,10 +14,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const loading = ref(true);
-const token = ref<string | null>(null);
+const beeInstance = ref<any>(null); 
 
 const getBasicTemplate = () => ({
-
   "page": {
     "title": "",
     "description": "",
@@ -90,43 +89,30 @@ const getBasicTemplate = () => ({
 onMounted(async () => {
     try {
         const response = await axios.post('/beefree/token');
-        token.value = response.data.token;
-        console.log('Token received:', token.value);
+        const token = response.data.token;
+        console.log('Token received:', token);
 
-        if (token.value) {
-            const beeConfig = {
-                uid: 'test1-clientside',
-                container: 'bee-plugin-container',
-                language: 'en-US',
-                onSave: (jsonFile, htmlFile) => {
-                    console.log('onSave', jsonFile, htmlFile);
-                },
-                onSaveAsTemplate: (jsonFile) => {
-                    console.log('onSaveAsTemplate', jsonFile);
-                },
-                onSend: (htmlFile) => {
-                    console.log('onSend', htmlFile);
-                },
-                onError: (errorMessage) => {
-                    console.log('onError', errorMessage);
-                }
-            };
+        const beeConfig = {
+            uid: 'test1-clientside',
+            container: 'bee-plugin-container',
+        };
 
-            const beeTest = new BeefreeSDK(token.value);
-            const template = getBasicTemplate();
-            console.log('Using template:', template);
+        beeInstance.value = new BeefreeSDK(token);
 
-            await beeTest.start(beeConfig, template);
+        const template = getBasicTemplate();
+        console.log('Using template:', template);
 
-            console.log('Beefree SDK initialized successfully', beeTest);
-            loading.value = false;
-        }
+        await beeInstance.value.start(beeConfig, template);
+
+        console.log('Beefree SDK initialized successfully');
+        loading.value = false;
     } catch (error) {
-        console.error('API failed:', {
+        console.error('Failed to initialize Beefree SDK:', {
             status: error.response?.status,
             data: error.response?.data,
             fullError: error
         });
+        loading.value = false;
     }
 });
 </script>
