@@ -90,7 +90,6 @@ async function showBuilder() {
     try {
         isBuilderVisible.value = true;
 
-        var bee;
         const response = await axios.post('/beefree/token');
         const token = response.data.token;
         console.log('Token received:', token);
