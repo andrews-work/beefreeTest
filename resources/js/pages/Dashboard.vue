@@ -16,55 +16,75 @@ const breadcrumbs: BreadcrumbItem[] = [
 const loading = ref(true);
 const token = ref<string | null>(null);
 
-// Basic template structure - you can get more from Beefree's GitHub
 const getBasicTemplate = () => ({
-    "version": "1.0",
-    "content": {
-        "type": "container",
-        "children": [
-            {
-                "type": "header",
-                "children": [
-                    {
-                        "type": "text",
-                        "data": {
-                            "text": "Welcome to my email!"
-                        }
-                    }
-                ]
-            },
-            {
-                "type": "section",
-                "children": [
-                    {
-                        "type": "column",
-                        "children": [
-                            {
-                                "type": "image",
-                                "data": {
-                                    "src": "https://via.placeholder.com/600x300",
-                                    "alt": "Placeholder image"
-                                }
-                            },
-                            {
-                                "type": "text",
-                                "data": {
-                                    "text": "This is a sample email template."
-                                }
-                            },
-                            {
-                                "type": "button",
-                                "data": {
-                                    "text": "Click me!",
-                                    "url": "https://example.com"
-                                }
-                            }
-                        ]
-                    }
-                ]
+
+  "page": {
+    "title": "",
+    "description": "",
+    "template": {
+      "name": "template-base",
+      "type": "basic",
+      "version": "0.0.1"
+    },
+    "body": {
+      "type": "mailup-bee-page-proprerties",
+      "container": {
+        "style": {
+          "background-color": "#FFFFFF"
+        }
+      },
+      "content": {
+        "style": {
+          "font-family": "Arial, 'Helvetica Neue', Helvetica, sans-serif",
+          "color": "#000000"
+        },
+        "computedStyle": {
+          "linkColor": "#0068A5",
+          "messageBackgroundColor": "transparent",
+          "messageWidth": "500px"
+        }
+      }
+    },
+    "rows": [
+      {
+        "type": "one-column-empty",
+        "container": {
+          "style": {
+            "background-color": "transparent"
+          }
+        },
+        "content": {
+          "style": {
+            "background-color": "transparent",
+            "color": "#000000",
+            "width": "500px"
+          }
+        },
+        "columns": [
+          {
+            "grid-columns": 12,
+            "modules": [
+              {
+                "type": "mailup-bee-newsletter-modules-empty",
+                "descriptor": {}
+              }
+            ],
+            "style": {
+              "background-color": "transparent",
+              "padding-top": "5px",
+              "padding-right": "0px",
+              "padding-bottom": "5px",
+              "padding-left": "0px",
+              "border-top": "0px dotted transparent",
+              "border-right": "0px dotted transparent",
+              "border-bottom": "0px dotted transparent",
+              "border-left": "0px dotted transparent"
             }
+          }
         ]
-    }
+      }
+    ]
+  }
 });
 
 onMounted(async () => {
