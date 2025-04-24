@@ -36,9 +36,9 @@ return [
     ],
 
     'beefree' => [
-        'url' => 'https://auth.getbee.io/loginV2',
         'client' => env('BEE_CLIENT'),
         'secret' => env('BEE_SECRET'),
+        'template_url' => env('BEE_TEMPLATE_URL', 'https://rsrc.getbee.io/api/templates/m-bee'),
     ],
 
 ];
