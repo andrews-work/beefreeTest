@@ -12,10 +12,9 @@ class EmailTemplate extends Model
     protected $fillable = [
         'user_id',
         'name',
-        // 'slug',
+        'subject',
         'content_json',
         'content_html',
-        // 'parent_id',
         'is_autosave'
     ];
 

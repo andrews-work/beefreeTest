@@ -12,11 +12,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            // $table->string('slug')->unique();
+            $table->string('subject')->nullable();
             $table->json('content_json');
             $table->text('content_html')->nullable();
             $table->boolean('is_autosave')->default(false);
-            // $table->foreignId('parent_id')->nullable()->constrained('email_templates');
             $table->timestamps();
 
             $table->index(['user_id', 'is_autosave']);

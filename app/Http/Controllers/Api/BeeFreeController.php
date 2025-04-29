@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SendEmailJob;
+use App\Mail\CampaignEmail;
 use App\Models\EmailTemplate;
 use App\Services\BeefreeService;
+use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class BeeFreeController extends Controller
@@ -29,12 +34,26 @@ class BeeFreeController extends Controller
                 return response()->json(['error' => 'Unauthorized'], 401);
             }
 
-            $userId = Auth::id();
+            $template = $this->beefreeService->getTemplate();
+
+            if ($request->has('template_id')) {
+                $savedTemplate = EmailTemplate::where('user_id', Auth::id())
+                    ->find($request->template_id);
+
+                if ($savedTemplate) {
+                    $template = $savedTemplate->content_json;
+                } else {
+                    Log::warning("Template not found", [
+                        'user_id' => Auth::id(),
+                        'template_id' => $request->template_id
+                    ]);
+                }
+            }
 
             return response()->json([
                 'credentials' => $this->beefreeService->getCredentials(),
-                'template' => $this->beefreeService->getTemplate(),
-                'message' => 'Base template loaded'
+                'template' => $template,
+                'message' => 'Template loaded'
             ]);
 
         } catch (Exception $e) {
@@ -44,6 +63,14 @@ class BeeFreeController extends Controller
                 'details' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function listTemplates()
+    {
+        return EmailTemplate::where('user_id', Auth::id())
+            ->where('is_autosave', false)
+            ->orderBy('created_at', 'desc')
+            ->get();
     }
 
     public function save(Request $request)
@@ -66,21 +93,25 @@ class BeeFreeController extends Controller
                 throw new Exception('The json field must be a valid JSON array');
             }
 
-            $template = EmailTemplate::updateOrCreate(
-                ['user_id' => $userId],
-                [
-                    'name' => $jsonData['title'] ?? 'Untitled Template',
-                    'content_json' => $jsonData,
-                    'content_html' => $request->html
-                ]
-            );
+            $template = EmailTemplate::create([
+                'user_id' => $userId,
+                'name' => $jsonData['title'] ?? 'Untitled Template ' . now()->format('Y-m-d H:i'),
+                'subject' => $jsonData['title'] ?? 'Untitled Template ' . now()->format('Y-m-d H:i'),
+                'content_json' => $jsonData,
+                'content_html' => $request->html,
+                'is_autosave' => $request->is_autosave ?? false
+            ]);
+
+            if (!$request->is_autosave) {
+                EmailTemplate::where('user_id', $userId)
+                    ->where('is_autosave', true)
+                    ->delete();
+            }
 
             Log::debug('Template saved', [
                 'user_id' => $userId,
                 'template_id' => $template->id,
                 'template_name' => $template->name,
-                // 'content_json' => json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
-                // 'content_html' => $this->formatHtmlForLogging($request->html)
             ]);
 
             return response()->json([
@@ -98,37 +129,173 @@ class BeeFreeController extends Controller
         }
     }
 
-    private function formatHtmlForLogging(?string $html): string
+    public function next(Request $request)
     {
-        if (empty($html)) {
-            return '[No HTML content]';
+        Log::info('Next step initiated', ['user_id' => Auth::id()]);
+        try {
+            $request->validate([
+                'template_id' => 'required|integer|exists:email_templates,id'
+            ]);
+
+            Log::info('Template ID received', ['template_id' => $request->template_id]);
+
+            return response()->json([
+                'redirect_url' => route('continue', ['template' => $request->template_id])
+            ]);
+
+        } catch (Exception $e) {
+            Log::error("Next step failed: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to proceed to next step: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function showContinue($template)
+    {
+        Log::info('Rendering Continue page', [
+            'user_id' => Auth::id(),
+            'template_id' => $template,
+            'route' => 'continue'
+        ]);
+
+        $templateData = EmailTemplate::where('user_id', Auth::id())
+            ->find($template);
+
+        if (!$templateData) {
+            Log::error('Template not found', ['template_id' => $template]);
+            return redirect()->back()->withErrors(['Template not found']);
         }
 
-        $html = preg_replace('/></', ">\n<", $html);
-        $html = preg_replace('/(<[^\/][^>]*>)/', "$1\n", $html);
-        $html = preg_replace('/(<\/[^>]*>)/', "\n$1", $html);
+        return Inertia::render('Continue', [
+            'templateId' => $template,
+            'templateData' => $templateData
+        ]);
+    }
 
-        $lines = explode("\n", $html);
-        $indented = [];
-        $indentLevel = 0;
+    public function sendEmail(Request $request)
+    {
+        try {
+            Log::info('Email scheduling request received');
 
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
-            if (empty($trimmed)) continue;
+            $validated = $request->validate([
+                'template_id' => 'required|integer|exists:email_templates,id,user_id,'.Auth::id(),
+                'recipients' => 'required|array|min:1',
+                'recipients.*' => 'required|email',
+                'scheduled_at' => 'required|date|after_or_equal:now',
+                'html_content' => 'required|string'
+            ]);
 
-            if (strpos($trimmed, '</') === 0) {
-                $indentLevel--;
+            Log::debug('Request validated successfully', [
+                'user_id' => Auth::id(),
+                'template_id' => $validated['template_id'],
+                'recipient_count' => count($validated['recipients']),
+                'scheduled_at' => $validated['scheduled_at']
+            ]);
+
+            $template = EmailTemplate::where('user_id', Auth::id())
+                ->findOrFail($validated['template_id']);
+
+            Log::info('Dispatching email jobs', [
+                'user_id' => Auth::id(),
+                'template_id' => $template->id,
+                'job_count' => count($validated['recipients'])
+            ]);
+
+            foreach ($validated['recipients'] as $recipient) {
+                SendEmailJob::dispatch(
+                    $recipient,
+                    $validated['html_content'],
+                    $template->name,
+                    $request->subject ?? $template->subject ?? $template->name, 
+                    Auth::user()
+                )->delay(Carbon::parse($validated['scheduled_at']));
+
+                Log::debug('Job dispatched for recipient', [
+                    'recipient' => $recipient,
+                    'scheduled_at' => $validated['scheduled_at']
+                ]);
             }
 
-            $indented[] = str_repeat('    ', $indentLevel) . $trimmed;
+            return response()->json([
+                'success' => true,
+                'message' => 'Emails scheduled successfully',
+                'scheduled_at' => $validated['scheduled_at'],
+                'recipient_count' => count($validated['recipients'])
+            ]);
 
-            if (strpos($trimmed, '<') === 0 &&
-                strpos($trimmed, '</') !== 0 &&
-                !preg_match('/<[^>]+\/>/', $trimmed)) {
-                $indentLevel++;
-            }
+        } catch (ValidationException $e) {
+            Log::error('Validation failed', [
+                'errors' => $e->errors(),
+                'request' => $request->except(['html_content']),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            Log::error('Email scheduling failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to schedule emails: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // update title on dashboard
+    public function update(Request $request, EmailTemplate $template)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255'
+        ]);
+
+        if ($template->user_id !== Auth::id()) {
+            abort(403);
         }
 
-        return implode("\n", $indented);
+        $template->update([
+            'name' => $request->name
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    // delete template
+    public function destroy(EmailTemplate $template)
+    {
+        if ($template->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $template->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    // update email subject
+    public function updateSubject(Request $request, EmailTemplate $template)
+    {
+        $request->validate([
+            'subject' => 'required|string|max:255'
+        ]);
+
+        if ($template->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $template->update([
+            'subject' => $request->subject
+        ]);
+
+        return response()->json(['success' => true]);
     }
 }
