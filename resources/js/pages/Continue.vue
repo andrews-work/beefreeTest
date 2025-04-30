@@ -4,6 +4,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import { AxiosError } from 'axios';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'EDM', href: '/dashboard' },
@@ -40,15 +41,13 @@ const emailSubject = ref('');
 const isSavingSubject = ref(false);
 
 const availableRecipients = ref([
-    { id: 1, email: 'myspam69@protonmail.com', name: 'proton' },
-    { id: 2, email: 'svehlaw@icloud.com', name: 'icloud' },
-    { id: 3, email: 'kaniaverbal@chefalicious.com', name: 'temporary' },
-    { id: 4, email: 'test3@test.com', name: 'Test User 3' },
+    { id: 1, email: 'kaniaverbal@chefalicious.com', name: 'temporary' },
+    { id: 2, email: 'test3@test.com', name: 'Test User 3' },
 ]);
 
 onMounted(() => {
     if (template.value) {
-        jsonContent.value = JSON.stringify(template.value.content_json, null, 2);
+        jsonContent.value = JSON.stringify(template.value.content?.content_json || {}, null, 2);
         emailSubject.value = template.value.subject || template.value.name || '';
     }
 
@@ -74,16 +73,21 @@ const updateEmailSubject = async () => {
         if (template.value) {
             template.value.subject = emailSubject.value;
         }
-    } catch (error) {
+        isEditingSubject.value = false;
+    } catch (error: unknown) {
         console.error('Failed to update subject:', error);
-        alert('Failed to update subject');
+        let errorMessage = 'Failed to update subject';
+        if (axios.isAxiosError(error)) {
+            errorMessage = error.response?.data?.message || error.message;
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        alert(errorMessage);
         if (template.value) {
             emailSubject.value = template.value.subject || template.value.name || '';
         }
-    } finally {
-        isSavingSubject.value = false;
-        isEditingSubject.value = false;
     }
+    isSavingSubject.value = false;
 };
 
 const toggleDropdown = () => {
@@ -109,13 +113,24 @@ const scheduleSend = async () => {
     try {
         const scheduledDateTime = new Date(`${scheduledDate.value}T${scheduledTime.value}`);
 
+        const recipientList = recipients.value
+            .split(',')
+            .map(r => r.trim())
+            .filter(r => r);
+
+        if (recipientList.length === 0) {
+            throw new Error('At least one recipient is required');
+        }
+
         const payload = {
             template_id: templateId.value,
-            recipients: recipients.value.split(',').map(r => r.trim()).filter(r => r),
+            recipients: recipientList,
             scheduled_at: scheduledDateTime.toISOString(),
-            html_content: template.value?.content_html,
-            subject: emailSubject.value // Include subject in payload
+            html_content: template.value?.content?.content_html || '',
+            subject: emailSubject.value
         };
+
+        console.log('Sending payload:', payload);
 
         const response = await axios.post('/beefree/sendEmail', payload);
 
@@ -129,27 +144,39 @@ const scheduleSend = async () => {
         } else {
             throw new Error(response.data.message || 'Failed to schedule emails');
         }
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('Error during email scheduling:', error);
         let errorMessage = 'Failed to schedule emails';
-        if (error.response?.data?.errors) {
-            errorMessage = Object.values(error.response.data.errors).flat().join('\n');
-        } else if (error.response?.data?.message) {
-            errorMessage = error.response.data.message;
+
+        if (axios.isAxiosError(error)) {
+            const axiosError = error as AxiosError<{
+                message?: string;
+                errors?: Record<string, string[]>;
+            }>;
+
+            if (axiosError.response?.data?.errors) {
+                errorMessage = Object.values(axiosError.response.data.errors).flat().join('\n');
+            } else if (axiosError.response?.data?.message) {
+                errorMessage = axiosError.response.data.message;
+            }
+
+            if (axiosError.response?.status === 422) {
+                errorMessage += '\nValidation errors:';
+                if (axiosError.response.data.errors) {
+                    for (const [field, errors] of Object.entries(axiosError.response.data.errors)) {
+                        errorMessage += `\n- ${field}: ${errors.join(', ')}`;
+                    }
+                }
+            }
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
         }
+
         alert(errorMessage);
-    } finally {
-        isLoading.value = false;
     }
+    isLoading.value = false;
 };
 
-const cancelSend = () => {
-    recipients.value = '';
-    const now = new Date();
-    const nextHour = new Date(now.setHours(now.getHours() + 1, 0, 0, 0));
-    scheduledDate.value = nextHour.toISOString().split('T')[0];
-    scheduledTime.value = `${String(nextHour.getHours()).padStart(2, '0')}:${String(nextHour.getMinutes()).padStart(2, '0')}`;
-};
 </script>
 
 <template>
@@ -253,7 +280,7 @@ const cancelSend = () => {
                     <h2 class="text-lg font-semibold mb-2">HTML Preview</h2>
                     <div class="relative overflow-hidden">
                         <div class="bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto max-h-96">
-                            <div v-html="template?.content_html"></div>
+                            <div v-html="template?.content?.content_html"></div>
                         </div>
                     </div>
                 </div>

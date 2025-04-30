@@ -22,25 +22,37 @@ interface BeefreeDataResponse {
     message: string;
 }
 
+interface Template {
+    id: number;
+    name: string;
+    updated_at: string;
+    [key: string]: any;
+}
+
+interface BeeEditor extends BeefreeSDK {
+    destroy: () => void;
+}
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'EDM', href: '/dashboard' }
 ];
 
 const isBuilderVisible = ref(false);
 const isLoading = ref(false);
-const beeEditor = ref<BeefreeSDK | null>(null);
+const beeEditor = ref<BeeEditor | null>(null);
 const lastSaveTime = ref<string | null>(null);
 const lastSavedJson = ref<any>(null);
-const templates = ref<any[]>([]);
+const templates = ref<Template[]>([]);
 const loadingTemplates = ref(false);
 const currentTemplateId = ref<number | null>(null);
 const showEditModal = ref(false);
 const showDeleteModal = ref(false);
-const currentEditingTemplate = ref<any>(null);
+const currentEditingTemplate = ref<Template | null>(null);
 const newTemplateName = ref('');
+const isTemplateLoaded = ref(false);
 
-const { props } = usePage();
-const templateData = props.templateData;
+const { props: pageProps } = usePage<{ templateData?: { id: number } }>();
+const templateData = pageProps.templateData;
 
 const fetchTemplates = async () => {
     try {
@@ -64,9 +76,39 @@ onMounted(() => {
     fetchTemplates();
 });
 
+const handleFormSubmit = async (templateId?: number, event?: Event) => {
+    event?.preventDefault();
+    try {
+        const idToUse = templateId ?? currentTemplateId.value;
+
+        if (templateId) {
+            currentTemplateId.value = templateId;
+        }
+
+        if (!templateId && !checkTemplateStatus()) {
+            return;
+        }
+
+        const response = await axios.post('/beefree/next', {
+            template_id: idToUse,
+        });
+
+        if (response.data.redirect_url) {
+            window.location.href = response.data.redirect_url;
+        }
+    } catch (error) {
+        console.error('Error proceeding to next step:', error);
+        alert('Error: Template not saved yet. Please save your template before proceeding.');
+    }
+};
+
 const loadTemplate = async (templateId?: number) => {
     try {
+        console.log('Starting template load for ID:', templateId);
+        isTemplateLoaded.value = false;
+
         if (beeEditor.value) {
+            console.log('Destroying previous editor instance');
             beeEditor.value.destroy();
             beeEditor.value = null;
         }
@@ -78,15 +120,20 @@ const loadTemplate = async (templateId?: number) => {
             ? `/beefree/data?template_id=${templateId}`
             : '/beefree/data';
 
+        console.log('Fetching template data from:', url);
         const { data } = await axios.get<BeefreeDataResponse>(url);
+        console.log('Received template data:', data);
 
-        beeEditor.value = new BeefreeSDK();
+        beeEditor.value = new BeefreeSDK() as BeeEditor;
         const { clientId, clientSecret, uid } = data.credentials;
 
+        console.log('Getting BeeFree token');
         await beeEditor.value.getToken(clientId, clientSecret);
+        console.log('Token received');
 
         isBuilderVisible.value = true;
 
+        console.log('Starting BeeFree editor');
         beeEditor.value.start({
             uid,
             container: 'bee-plugin-container',
@@ -95,29 +142,52 @@ const loadTemplate = async (templateId?: number) => {
             onSave: handleSave,
             onAutoSave: handleAutoSave,
             onLoad: (json) => {
+                console.log('Editor loaded successfully');
                 handleLoad(json);
-                currentTemplateId.value = templateId;
+                currentTemplateId.value = templateId ?? null;
+                isTemplateLoaded.value = true;
+                isLoading.value = false;
             },
-            onError: (error) => {
+            onError: (error: unknown) => {
+                console.error('Editor error:', error);
                 handleError(error);
+                isTemplateLoaded.value = false;
+                isLoading.value = false;
             },
             workspace: {
                 editSingleRow: false
-            },
-            debug: {
-                inspectJson: true
             }
         }, data.template);
     } catch (error) {
+        console.error('Full error:', error);
+        isTemplateLoaded.value = false;
+
         let errorMessage = 'Error loading template. Please try again.';
         if (axios.isAxiosError(error)) {
             errorMessage = error.response?.data?.error || errorMessage;
+            console.error('Axios error details:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers
+            });
         }
-
         alert(errorMessage);
-    } finally {
         isLoading.value = false;
     }
+};
+
+const handleError = (error: unknown) => {
+    let message = 'Unknown editor error';
+
+    if (typeof error === 'string') {
+        message = error;
+    } else if (error instanceof Error) {
+        message = error.message;
+    } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        message = String(error.message);
+    }
+
+    alert(`Editor error: ${message}`);
 };
 
 const handleAutoSave = async (jsonFile: any) => {
@@ -132,7 +202,7 @@ const handleAutoSave = async (jsonFile: any) => {
     lastSavedJson.value = JSON.parse(JSON.stringify(jsonFile));
 
     try {
-        const response = await axios.post('/beefree/data/save', {
+        await axios.post('/beefree/data/save', {
             json: jsonFile,
             html: null,
             is_autosave: true
@@ -152,6 +222,11 @@ const handleSave = async (jsonFile: any, htmlFile: string) => {
             html: htmlFile,
             is_autosave: false
         });
+
+        if (response.data.template_id) {
+            currentTemplateId.value = response.data.template_id;
+        }
+
         alert(`Template saved successfully at ${now}`);
     } catch (error) {
         console.error('Save failed:', error);
@@ -161,11 +236,9 @@ const handleSave = async (jsonFile: any, htmlFile: string) => {
 
 const handleLoad = (jsonFile: any) => {};
 
-const handleError = (errorMessage: string) => {
-    alert(`Editor error: ${errorMessage}`);
-};
-
 async function showBuilder() {
+    isTemplateLoaded.value = false;
+    currentTemplateId.value = null;
     await loadTemplate();
 }
 
@@ -178,47 +251,32 @@ const exitEditor = () => {
         beeEditor.value = null;
     }
     isBuilderVisible.value = false;
+    isTemplateLoaded.value = false;
+    currentTemplateId.value = null;
+    isLoading.value = false;
     fetchTemplates();
 };
 
 const checkTemplateStatus = () => {
-    if (currentTemplateId.value === null) {
-
+    if (!isTemplateLoaded.value) {
         alert('Please wait for the template to load');
         return false;
-    } else if (!currentTemplateId.value) {
+    }
 
+    if (currentTemplateId.value == null) {
         alert('Save it first please');
         return false;
     }
+
+    if (typeof currentTemplateId.value !== 'number') {
+        alert('Invalid template state');
+        return false;
+    }
+
     return true;
 };
 
-const handleFormSubmit = async (template_id?: number) => {
-    try {
-        const idToUse = template_id ?? currentTemplateId.value;
-
-        if (!idToUse) {
-            alert('Please save your template first or select a valid template');
-            return;
-        }
-
-        const response = await axios.post('/beefree/next', {
-            template_id: idToUse,
-        });
-
-        if (response.data.redirect_url) {
-            window.location.href = response.data.redirect_url;
-        }
-
-    } catch (error) {
-        console.error('Error proceeding to next step:', error);
-        alert('Error: Template not saved yet. Please save your template before proceeding.');
-        throw new Error('Template not saved yet. Please save your template before proceeding.');
-    }
-};
-
-const editTemplateName = (template: any) => {
+const editTemplateName = (template: Template) => {
     currentEditingTemplate.value = template;
     newTemplateName.value = template.name;
     showEditModal.value = true;
@@ -240,7 +298,7 @@ const updateTemplateName = async () => {
     }
 };
 
-const confirmDeleteTemplate = (template: any) => {
+const confirmDeleteTemplate = (template: Template) => {
     currentEditingTemplate.value = template;
     showDeleteModal.value = true;
 };
@@ -259,6 +317,7 @@ const deleteTemplate = async () => {
     }
 };
 </script>
+
 <template>
     <Head title="Continue" />
     <AppLayout :breadcrumbs="breadcrumbs">
@@ -301,7 +360,7 @@ const deleteTemplate = async () => {
                             <li
                                 v-for="template in templates"
                                 :key="template.id"
-                                class="py-3 px-2 hover:bg-gray-800 transition-colors"
+                                class="py-3 px-2 hover:bg-gray-900 transition-colors"
                             >
                                 <div class="flex justify-between items-center">
                                     <div>
@@ -404,15 +463,14 @@ const deleteTemplate = async () => {
                     ← Back to Campaigns
                 </button>
                 <div class="flex gap-2">
-                    <form @submit.prevent="handleFormSubmit" class="inline">
-                        <input type="hidden">
-                        <button
-                            type="submit"
-                            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                        >
-                            Next →
-                        </button>
-                    </form>
+                    <div class="flex gap-2">
+                    <button
+                        @click="handleFormSubmit()"
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                    >
+                        Next →
+                    </button>
+                </div>
                 </div>
             </div>
 
@@ -428,3 +486,4 @@ const deleteTemplate = async () => {
         </div>
     </AppLayout>
 </template>
+

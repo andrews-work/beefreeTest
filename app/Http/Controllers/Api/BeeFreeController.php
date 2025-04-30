@@ -37,13 +37,14 @@ class BeeFreeController extends Controller
             $template = $this->beefreeService->getTemplate();
 
             if ($request->has('template_id')) {
-                $savedTemplate = EmailTemplate::where('user_id', Auth::id())
+                $savedTemplate = EmailTemplate::with('content')
+                    ->where('user_id', Auth::id())
                     ->find($request->template_id);
 
-                if ($savedTemplate) {
-                    $template = $savedTemplate->content_json;
+                if ($savedTemplate && $savedTemplate->content) {
+                    $template = $savedTemplate->content->content_json;
                 } else {
-                    Log::warning("Template not found", [
+                    Log::warning("Template not found or has no content", [
                         'user_id' => Auth::id(),
                         'template_id' => $request->template_id
                     ]);
@@ -97,9 +98,12 @@ class BeeFreeController extends Controller
                 'user_id' => $userId,
                 'name' => $jsonData['title'] ?? 'Untitled Template ' . now()->format('Y-m-d H:i'),
                 'subject' => $jsonData['title'] ?? 'Untitled Template ' . now()->format('Y-m-d H:i'),
-                'content_json' => $jsonData,
-                'content_html' => $request->html,
                 'is_autosave' => $request->is_autosave ?? false
+            ]);
+
+            $template->content()->create([
+                'content_json' => $jsonData,
+                'content_html' => $request->html
             ]);
 
             if (!$request->is_autosave) {
@@ -107,12 +111,6 @@ class BeeFreeController extends Controller
                     ->where('is_autosave', true)
                     ->delete();
             }
-
-            Log::debug('Template saved', [
-                'user_id' => $userId,
-                'template_id' => $template->id,
-                'template_name' => $template->name,
-            ]);
 
             return response()->json([
                 'success' => true,
@@ -159,7 +157,8 @@ class BeeFreeController extends Controller
             'route' => 'continue'
         ]);
 
-        $templateData = EmailTemplate::where('user_id', Auth::id())
+        $templateData = EmailTemplate::with('content')
+            ->where('user_id', Auth::id())
             ->find($template);
 
         if (!$templateData) {
@@ -186,15 +185,9 @@ class BeeFreeController extends Controller
                 'html_content' => 'required|string'
             ]);
 
-            Log::debug('Request validated successfully', [
-                'user_id' => Auth::id(),
-                'template_id' => $validated['template_id'],
-                'recipient_count' => count($validated['recipients']),
-                'scheduled_at' => $validated['scheduled_at']
-            ]);
-
+            $templateId = (int) $validated['template_id'];
             $template = EmailTemplate::where('user_id', Auth::id())
-                ->findOrFail($validated['template_id']);
+                ->findOrFail($templateId);
 
             Log::info('Dispatching email jobs', [
                 'user_id' => Auth::id(),
@@ -205,9 +198,9 @@ class BeeFreeController extends Controller
             foreach ($validated['recipients'] as $recipient) {
                 SendEmailJob::dispatch(
                     $recipient,
-                    $validated['html_content'],
+                    $templateId,
                     $template->name,
-                    $request->subject ?? $template->subject ?? $template->name, 
+                    $request->subject ?? $template->subject ?? $template->name,
                     Auth::user()
                 )->delay(Carbon::parse($validated['scheduled_at']));
 
@@ -225,12 +218,6 @@ class BeeFreeController extends Controller
             ]);
 
         } catch (ValidationException $e) {
-            Log::error('Validation failed', [
-                'errors' => $e->errors(),
-                'request' => $request->except(['html_content']),
-                'user_id' => Auth::id()
-            ]);
-
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
@@ -238,12 +225,6 @@ class BeeFreeController extends Controller
             ], 422);
 
         } catch (Exception $e) {
-            Log::error('Email scheduling failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'user_id' => Auth::id()
-            ]);
-
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to schedule emails: ' . $e->getMessage()

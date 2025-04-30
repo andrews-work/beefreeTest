@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Mail\CampaignEmail;
+use App\Models\EmailTemplate;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -18,7 +19,7 @@ class SendEmailJob implements ShouldQueue
 
     public function __construct(
         public string $recipient,
-        public string $htmlContent,
+        public int $templateId,
         public string $templateName,
         public string $subject,
         public User $user
@@ -27,18 +28,20 @@ class SendEmailJob implements ShouldQueue
     public function handle()
     {
         try {
+            $template = EmailTemplate::with('content')->findOrFail($this->templateId);
+
             Log::debug('Preparing to send email', [
                 'recipient' => $this->recipient,
-                'template_size' => strlen($this->htmlContent) . ' bytes'
+                'template_size' => strlen($template->content->content_html) . ' bytes'
             ]);
 
             $email = new CampaignEmail(
-                $this->htmlContent,
+                $template->content->content_html,
                 $this->templateName,
                 $this->user
             );
 
-            $email->subject($this->subject); 
+            $email->subject($this->subject);
 
             Mail::to($this->recipient)->send($email);
 
@@ -53,7 +56,6 @@ class SendEmailJob implements ShouldQueue
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-
             throw $e;
         }
     }

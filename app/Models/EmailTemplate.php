@@ -13,18 +13,20 @@ class EmailTemplate extends Model
         'user_id',
         'name',
         'subject',
-        'content_json',
-        'content_html',
         'is_autosave'
     ];
 
     protected $casts = [
-        'content_json' => 'array',
         'is_autosave' => 'boolean'
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function content()
+    {
+        return $this->hasOne(EmailTemplateContent::class);
     }
 }
