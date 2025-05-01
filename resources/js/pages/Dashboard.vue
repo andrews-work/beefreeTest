@@ -143,7 +143,7 @@ const loadTemplate = async (templateId?: number) => {
             autosave: 30,
             onSave: handleSave,
             onAutoSave: handleAutoSave,
-            onLoad: (json) => {
+            onLoad: () => {
                 console.log('Editor loaded successfully');
                 currentTemplateId.value = templateId ?? null;
                 isTemplateLoaded.value = true;
