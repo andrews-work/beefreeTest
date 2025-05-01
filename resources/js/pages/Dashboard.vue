@@ -145,7 +145,6 @@ const loadTemplate = async (templateId?: number) => {
             onAutoSave: handleAutoSave,
             onLoad: (json) => {
                 console.log('Editor loaded successfully');
-                handleLoad(json);
                 currentTemplateId.value = templateId ?? null;
                 isTemplateLoaded.value = true;
                 isLoading.value = false;
@@ -235,8 +234,6 @@ const handleSave = async (jsonFile: any, htmlFile: string) => {
         alert('Failed to save template');
     }
 };
-
-const handleLoad = (jsonFile: any) => {};
 
 async function showBuilder() {
     isTemplateLoaded.value = false;
@@ -403,7 +400,7 @@ const deleteTemplate = async () => {
                             </li>
                         </ul>
 
-              
+
 
                         <div v-else class="text-center py-6 text-gray-400">
                             No campaigns found. Create your first one!
