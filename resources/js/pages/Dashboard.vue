@@ -50,6 +50,7 @@ const showDeleteModal = ref(false);
 const currentEditingTemplate = ref<Template | null>(null);
 const newTemplateName = ref('');
 const isTemplateLoaded = ref(false);
+const showSchedule = ref(false);
 
 const { props: pageProps } = usePage<{ templateData?: { id: number } }>();
 const templateData = pageProps.templateData;
@@ -74,6 +75,7 @@ onMounted(() => {
         console.warn('No template data found in session storage');
     }
     fetchTemplates();
+    // showEmailQueue();
 });
 
 const handleFormSubmit = async (templateId?: number, event?: Event) => {
@@ -400,6 +402,9 @@ const deleteTemplate = async () => {
                                 </div>
                             </li>
                         </ul>
+
+              
+
                         <div v-else class="text-center py-6 text-gray-400">
                             No campaigns found. Create your first one!
                         </div>

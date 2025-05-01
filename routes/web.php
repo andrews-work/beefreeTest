@@ -26,6 +26,7 @@ Route::put('/email-templates/{template}', [BeeFreeController::class, 'update'])-
 Route::delete('/email-templates/{template}', [BeeFreeController::class, 'destroy'])->middleware('auth');
 Route::put('/email-templates/{template}/subject', [BeeFreeController::class, 'updateSubject'])->middleware('auth');
 
+
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';
 
