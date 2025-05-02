@@ -1,8 +1,23 @@
+services:
+  mysql:
+    name: MySQL Database
+    triggeredBy: ["postDevcontainerStart"]
+    commands:
+      start: sudo service mysql start
+      ready: sudo mysql -uroot -e "SHOW DATABASES;"
+
 tasks:
   setup:
-    name: Setup Environment
-    command: bash .devcontainer/install.sh
-  build:
-    name: Start Development Servers
-    command: composer run dev
+    name: "Initialize Project"
+    triggeredBy: ["postDevcontainerStart"]
+    command: |
+      bash .devcontainer/install.sh
+      composer install
+      npm install
 
+  dev:
+    name: "Start Dev Servers"
+    triggeredBy: ["manual"]  # Run this manually after setup completes
+    command: |
+      php artisan serve --host=0.0.0.0 --port=8000 &
+      npm run dev
