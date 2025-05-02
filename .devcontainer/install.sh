@@ -1,4 +1,4 @@
-# install.sh
+#!/bin/bash
 
 # Phase 1: Verify installations
 echo "=== VERIFICATION ==="
@@ -46,7 +46,13 @@ echo "=== UPDATING LARAVEL CONFIG ==="
 if [ -f ".env" ]; then
     sed -i "s/^DB_USERNAME=.*/DB_USERNAME=beefree/" .env
     sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
+    sed -i "s/^DB_HOST=.*/DB_HOST=127.0.0.1/" .env
 fi
+
+# Install dependencies
+echo "=== INSTALLING DEPENDENCIES ==="
+composer install
+npm install
 
 # Generate Laravel app key if missing
 if [ -f "artisan" ] && [ -z "$(grep '^APP_KEY=base64:' .env)" ]; then
@@ -56,10 +62,9 @@ fi
 
 # Phase 4: Seed Database
 echo "=== SEEDING DATABASE ==="
-php artisan migrate
-php artisan db:seed
+php artisan migrate --force
+php artisan db:seed --force
 echo "Database seeded!"
 
-# Phase 5: Final Message (instead of running dev)
 echo ""
-echo "🎉 SETUP COMPLETE! Next steps:"
+echo "🎉 SETUP COMPLETE!"

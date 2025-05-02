@@ -20,5 +20,5 @@
       }
     },
     "forwardPorts": [8000, 5173, 3306],
-    "postCreateCommand": "gitpod tasks run setup"
-  }
+    "postCreateCommand": "bash .devcontainer/setup.sh"
+}
