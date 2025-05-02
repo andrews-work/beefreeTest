@@ -12,12 +12,4 @@ tasks:
     triggeredBy: ["postDevcontainerStart"]
     command: |
       bash .devcontainer/install.sh
-      composer install
-      npm install
-
-  dev:
-    name: "Start Dev Servers"
-    triggeredBy: ["manual"]  # Run this manually after setup completes
-    command: |
-      php artisan serve --host=0.0.0.0 --port=8000 &
-      npm run dev
+      composer run dev
