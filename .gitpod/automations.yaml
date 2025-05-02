@@ -14,7 +14,8 @@ tasks:
     command: bash .devcontainer/setup.sh
 
   dev:
-    name: "Start Development Servers"
+    name: "Start Dev Servers"
     description: "Runs Laravel and Vite dev servers"
     triggeredBy: ["manual"]
-    command: composer run dev
+    command: |
+      composer run dev

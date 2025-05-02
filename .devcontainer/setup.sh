@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e # Exit immediately if any command fails
 
+echo "=== SETTING UP FILE PERMISSIONS ==="
+sudo chown -R vscode:vscode /workspaces/beefreeTest
+sudo chmod -R 755 /workspaces/beefreeTest
+
 echo "=== CONFIGURING ENVIRONMENT ==="
 if [ ! -f ".env" ]; then
     cp .env.example .env
@@ -13,14 +17,10 @@ if [ ! -f ".env" ]; then
     sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
 fi
 
-echo "=== INSTALLING DEPENDENCIES ==="
-composer install --no-interaction
-npm install --no-audit
-
-echo "=== SETTING UP MYSQL ==="
+echo "=== STARTING MYSQL ==="
 sudo service mysql start
 
-# Wait for MySQL to be ready
+echo "=== WAITING FOR MYSQL ==="
 for i in {1..10}; do
     if sudo mysql -uroot -e "SHOW DATABASES;" &>/dev/null; then
         break
@@ -30,7 +30,7 @@ for i in {1..10}; do
     fi
 done
 
-# Create database and user
+echo "=== CONFIGURING DATABASE ==="
 sudo mysql -uroot <<MYSQL_SCRIPT
 CREATE DATABASE IF NOT EXISTS beefree;
 CREATE USER IF NOT EXISTS 'beefree'@'localhost' IDENTIFIED BY 'password';
@@ -39,9 +39,19 @@ ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '';
 FLUSH PRIVILEGES;
 MYSQL_SCRIPT
 
-echo "=== SETTING UP LARAVEL ==="
+echo "=== INSTALLING COMPOSER DEPENDENCIES ==="
+composer install --no-interaction --no-progress
+
+echo "=== INSTALLING NPM DEPENDENCIES ==="
+npm install --no-audit
+
+echo "=== GENERATING APP KEY ==="
 php artisan key:generate
+
+echo "=== RUNNING MIGRATIONS ==="
 php artisan migrate --force
+
+echo "=== SEEDING DATABASE ==="
 php artisan db:seed --force
 
-echo "✅ SETUP COMPLETE - Run 'Start Development Servers' task to begin"
+echo "✅ SETUP COMPLETE! Run the 'Start Dev Servers' task when ready."

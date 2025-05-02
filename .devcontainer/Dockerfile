@@ -10,6 +10,10 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     php-xml \
     php-zip \
     php-mbstring \
+    php-curl \
+    php-tokenizer \
+    php-json \
+    php-bcmath \
     mysql-server
 
 # Install Composer
