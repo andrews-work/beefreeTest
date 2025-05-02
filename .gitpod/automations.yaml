@@ -1,0 +1,8 @@
+tasks:
+  setup:
+    name: Setup Environment
+    command: bash .devcontainer/install.sh
+  build:
+    name: Start Development Servers
+    command: composer run dev
+
