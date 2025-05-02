@@ -27,4 +27,27 @@ GRANT ALL PRIVILEGES ON beefree.* TO 'beefree'@'localhost';
 SHOW GRANTS FOR 'beefree'@'localhost';
 MYSQL_SCRIPT
 
-echo "✅ STEPS 1-4 COMPLETED SUCCESSFULLY"
+echo "=== STEP 5: Prepare Database ==="
+# Update .env to use MySQL (in case it was sqlite)
+sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
+sed -i "s/^DB_HOST=.*/DB_HOST=127.0.0.1/" .env
+sed -i "s/^DB_PORT=.*/DB_PORT=3306/" .env
+sed -i "s/^DB_DATABASE=.*/DB_DATABASE=beefree/" .env
+sed -i "s/^DB_USERNAME=.*/DB_USERNAME=beefree/" .env
+sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
+
+# Install dependencies (required for artisan commands)
+echo "Installing Composer dependencies..."
+composer install --no-interaction --no-progress
+
+# Generate app key (required before migrations)
+echo "Generating Laravel app key..."
+php artisan key:generate
+
+# Run migrations and seeders
+echo "Running migrations..."
+php artisan migrate --force
+echo "Seeding database..."
+php artisan db:seed --force
+
+echo "✅ STEPS 1-5 COMPLETED SUCCESSFULLY"
