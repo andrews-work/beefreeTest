@@ -10,4 +10,4 @@ tasks:
   full-setup:
     name: "Complete Project Setup"
     triggeredBy: ["postDevcontainerStart"]
-    command: bash .devcontainer/setup.sh
+    command: bash .devcontainer/init.sh
