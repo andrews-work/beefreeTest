@@ -9,13 +9,10 @@ services:
 tasks:
   setup:
     name: "Project Setup"
-    description: "Configures environment and installs dependencies"
     triggeredBy: ["postDevcontainerStart"]
     command: bash .devcontainer/setup.sh
 
   dev:
     name: "Start Dev Servers"
-    description: "Runs Laravel and Vite dev servers"
     triggeredBy: ["manual"]
-    command: |
-      composer run dev
+    command: composer run dev
