@@ -36,18 +36,4 @@ sed -i "s/^DB_DATABASE=.*/DB_DATABASE=beefree/" .env
 sed -i "s/^DB_USERNAME=.*/DB_USERNAME=beefree/" .env
 sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
 
-# Install dependencies (required for artisan commands)
-echo "Installing Composer dependencies..."
-composer install --no-interaction --no-progress
-
-# Generate app key (required before migrations)
-echo "Generating Laravel app key..."
-php artisan key:generate
-
-# Run migrations and seeders
-echo "Running migrations..."
-php artisan migrate --force
-echo "Seeding database..."
-php artisan db:seed --force
-
 echo "✅ STEPS 1-5 COMPLETED SUCCESSFULLY"

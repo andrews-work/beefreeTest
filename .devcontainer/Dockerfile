@@ -7,6 +7,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     npm \
     php-cli \
     php-mysql \
+    php-dom \
+    php-xml \
     mysql-server && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
