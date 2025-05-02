@@ -1,48 +1,51 @@
 #!/bin/bash
 set -e # Exit immediately if any command fails
 
-echo "=== STARTING MYSQL ==="
+# 1. Create .env if missing and set DB config
+echo "=== CONFIGURING ENVIRONMENT ==="
+if [ ! -f ".env" ]; then
+    cp .env.example .env
+    # Force MySQL configuration
+    sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
+    sed -i "s/^DB_HOST=.*/DB_HOST=127.0.0.1/" .env
+    sed -i "s/^DB_PORT=.*/DB_PORT=3306/" .env
+    sed -i "s/^DB_DATABASE=.*/DB_DATABASE=beefree/" .env
+    sed -i "s/^DB_USERNAME=.*/DB_USERNAME=beefree/" .env
+    sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
+fi
+
+# 2. Install dependencies
+echo "=== INSTALLING DEPENDENCIES ==="
+composer install --no-interaction
+npm install --no-audit
+
+# 3. Start and configure MySQL
+echo "=== SETTING UP MYSQL ==="
 sudo service mysql start
 
-echo "=== TESTING MYSQL CONNECTION ==="
+# Wait for MySQL to be ready
 for i in {1..10}; do
     if sudo mysql -uroot -e "SHOW DATABASES;" &>/dev/null; then
-        echo "MySQL connection successful!"
         break
     else
-        echo "Waiting for MySQL connection (attempt $i/10)..."
+        echo "Waiting for MySQL (attempt $i/10)..."
         sleep 2
     fi
 done
 
-echo "=== CREATING DATABASE ==="
-sudo mysql -uroot -e "CREATE DATABASE IF NOT EXISTS beefree;"
-sudo mysql -uroot -e "SHOW DATABASES;"
-
-echo "=== CREATING USER ==="
-sudo mysql -uroot <<EOF
+# Create database and user
+sudo mysql -uroot <<MYSQL_SCRIPT
+CREATE DATABASE IF NOT EXISTS beefree;
 CREATE USER IF NOT EXISTS 'beefree'@'localhost' IDENTIFIED BY 'password';
 GRANT ALL PRIVILEGES ON beefree.* TO 'beefree'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-
-echo "=== CONFIGURING MYSQL ACCESS ==="
-sudo mysql -uroot <<EOF
 ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '';
 FLUSH PRIVILEGES;
-EOF
+MYSQL_SCRIPT
 
-echo "=== UPDATING LARAVEL CONFIG ==="
-if [ -f ".env" ]; then
-    sed -i "s/^DB_USERNAME=.*/DB_USERNAME=beefree/" .env
-    sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
-    sed -i "s/^DB_HOST=.*/DB_HOST=127.0.0.1/" .env
-fi
-
-echo "=== GENERATING LARAVEL APP KEY ==="
+# 4. Generate app key and run migrations
+echo "=== SETTING UP LARAVEL ==="
 php artisan key:generate
-
-echo "=== SEEDING DATABASE ==="
 php artisan migrate --force
 php artisan db:seed --force
 
+echo "✅ SETUP COMPLETE - Run 'composer run dev' to start servers"
