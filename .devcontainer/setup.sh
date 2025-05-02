@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e # Exit immediately if any command fails
 
-# 1. Create .env if missing and set DB config
 echo "=== CONFIGURING ENVIRONMENT ==="
 if [ ! -f ".env" ]; then
     cp .env.example .env
@@ -14,12 +13,10 @@ if [ ! -f ".env" ]; then
     sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
 fi
 
-# 2. Install dependencies
 echo "=== INSTALLING DEPENDENCIES ==="
 composer install --no-interaction
 npm install --no-audit
 
-# 3. Start and configure MySQL
 echo "=== SETTING UP MYSQL ==="
 sudo service mysql start
 
@@ -42,10 +39,9 @@ ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '';
 FLUSH PRIVILEGES;
 MYSQL_SCRIPT
 
-# 4. Generate app key and run migrations
 echo "=== SETTING UP LARAVEL ==="
 php artisan key:generate
 php artisan migrate --force
 php artisan db:seed --force
 
-echo "✅ SETUP COMPLETE - Run 'composer run dev' to start servers"
+echo "✅ SETUP COMPLETE - Run 'Start Development Servers' task to begin"
