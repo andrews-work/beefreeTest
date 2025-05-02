@@ -1,50 +1,30 @@
 #!/bin/bash
 set -e
 
-# 1. Fix permissions FIRST
-sudo chown -R vscode:vscode /workspaces/beefreeTest
-sudo chmod -R 755 /workspaces/beefreeTest
+echo "=== STEP 1: Verify dependencies ==="
+echo "Node: $(node -v)"
+echo "npm: $(npm -v)"
+echo "PHP: $(php -v | head -n 1)"
+echo "Composer: $(composer -V)"
+echo "MySQL: $(mysql --version)"
 
-# 2. Environment setup
+echo "=== STEP 2: Configure environment ==="
 if [ ! -f ".env" ]; then
     cp .env.example .env
-    sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
-    sed -i "s/^DB_HOST=.*/DB_HOST=127.0.0.1/" .env
-    sed -i "s/^DB_PORT=.*/DB_PORT=3306/" .env
-    sed -i "s/^DB_DATABASE=.*/DB_DATABASE=beefree/" .env
-    sed -i "s/^DB_USERNAME=.*/DB_USERNAME=beefree/" .env
-    sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
+    echo "Created .env from .env.example"
 fi
+echo "DB_CONNECTION: $(grep DB_CONNECTION .env)"
 
-# 3. Start MySQL
+echo "=== STEP 3: Start MySQL ==="
 sudo service mysql start
+echo "MySQL status: $(sudo service mysql status | head -n 1)"
 
-# 4. Wait for MySQL
-for i in {1..10}; do
-  if sudo mysql -uroot -e "SHOW DATABASES;" &>/dev/null; then
-    break
-  else
-    echo "Waiting for MySQL (attempt $i/10)..."
-    sleep 2
-  fi
-done
-
-# 5. Create database
+echo "=== STEP 4: Create MySQL user ==="
 sudo mysql -uroot <<MYSQL_SCRIPT
 CREATE DATABASE IF NOT EXISTS beefree;
 CREATE USER IF NOT EXISTS 'beefree'@'localhost' IDENTIFIED BY 'password';
 GRANT ALL PRIVILEGES ON beefree.* TO 'beefree'@'localhost';
-ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '';
-FLUSH PRIVILEGES;
+SHOW GRANTS FOR 'beefree'@'localhost';
 MYSQL_SCRIPT
 
-# 6. Install dependencies
-composer install --no-interaction --no-progress
-npm install --no-audit
-
-# 7. Laravel setup
-php artisan key:generate
-php artisan migrate --force
-php artisan db:seed --force
-
-echo "✅ Setup complete! Run 'composer run dev' when ready."
+echo "✅ STEPS 1-4 COMPLETED SUCCESSFULLY"

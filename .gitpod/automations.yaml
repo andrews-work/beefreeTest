@@ -7,12 +7,7 @@ services:
       ready: sudo mysql -uroot -e "SHOW DATABASES;"
 
 tasks:
-  setup:
-    name: "Project Setup"
+  setup-stage1:
+    name: "Setup (Stage 1: Steps 1-4)"
     triggeredBy: ["postDevcontainerStart"]
     command: bash .devcontainer/setup.sh
-
-  dev:
-    name: "Start Dev Servers"
-    triggeredBy: ["manual"]
-    command: composer run dev
