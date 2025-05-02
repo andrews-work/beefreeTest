@@ -28,12 +28,16 @@ SHOW GRANTS FOR 'beefree'@'localhost';
 MYSQL_SCRIPT
 
 echo "=== STEP 5: Prepare Database ==="
-# Update .env to use MySQL (in case it was sqlite)
-sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
-sed -i "s/^DB_HOST=.*/DB_HOST=127.0.0.1/" .env
-sed -i "s/^DB_PORT=.*/DB_PORT=3306/" .env
-sed -i "s/^DB_DATABASE=.*/DB_DATABASE=beefree/" .env
-sed -i "s/^DB_USERNAME=.*/DB_USERNAME=beefree/" .env
-sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=password/" .env
+# Uncomment and set MySQL settings (handles both commented and uncommented cases)
+sed -i "s/^#\?DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
+sed -i "s/^#\?DB_HOST=.*/DB_HOST=127.0.0.1/" .env
+sed -i "s/^#\?DB_PORT=.*/DB_PORT=3306/" .env
+sed -i "s/^#\?DB_DATABASE=.*/DB_DATABASE=beefree/" .env
+sed -i "s/^#\?DB_USERNAME=.*/DB_USERNAME=beefree/" .env
+sed -i "s/^#\?DB_PASSWORD=.*/DB_PASSWORD=password/" .env
+
+# Verify changes
+echo "=== Updated .env ==="
+grep -E "^DB_(CONNECTION|HOST|PORT|DATABASE|USERNAME|PASSWORD)" .env
 
 echo "✅ STEPS 1-5 COMPLETED SUCCESSFULLY"
