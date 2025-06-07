@@ -10,7 +10,6 @@ use App\Services\BeefreeService;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -30,22 +29,16 @@ class BeeFreeController extends Controller
     public function credentials(Request $request)
     {
         try {
-            if (!Auth::check()) {
-                return response()->json(['error' => 'Unauthorized'], 401);
-            }
-
             $template = $this->beefreeService->getTemplate();
 
             if ($request->has('template_id')) {
                 $savedTemplate = EmailTemplate::with('content')
-                    ->where('user_id', Auth::id())
                     ->find($request->template_id);
 
                 if ($savedTemplate && $savedTemplate->content) {
                     $template = $savedTemplate->content->content_json;
                 } else {
                     Log::warning("Template not found or has no content", [
-                        'user_id' => Auth::id(),
                         'template_id' => $request->template_id
                     ]);
                 }
@@ -68,8 +61,7 @@ class BeeFreeController extends Controller
 
     public function listTemplates()
     {
-        return EmailTemplate::where('user_id', Auth::id())
-            ->where('is_autosave', false)
+        return EmailTemplate::where('is_autosave', false)
             ->orderBy('created_at', 'desc')
             ->get();
     }
@@ -77,11 +69,6 @@ class BeeFreeController extends Controller
     public function save(Request $request)
     {
         try {
-            $userId = Auth::id();
-            if (!$userId) {
-                return response()->json(['error' => 'Unauthorized'], 401);
-            }
-
             $jsonData = $request->json;
             if (is_string($jsonData)) {
                 $jsonData = json_decode($jsonData, true);
@@ -95,7 +82,7 @@ class BeeFreeController extends Controller
             }
 
             $template = EmailTemplate::create([
-                'user_id' => $userId,
+                'user_id' => null,
                 'name' => $jsonData['title'] ?? 'Untitled Template ' . now()->format('Y-m-d H:i'),
                 'subject' => $jsonData['title'] ?? 'Untitled Template ' . now()->format('Y-m-d H:i'),
                 'is_autosave' => $request->is_autosave ?? false
@@ -107,9 +94,7 @@ class BeeFreeController extends Controller
             ]);
 
             if (!$request->is_autosave) {
-                EmailTemplate::where('user_id', $userId)
-                    ->where('is_autosave', true)
-                    ->delete();
+                EmailTemplate::where('is_autosave', true)->delete();
             }
 
             return response()->json([
@@ -129,7 +114,7 @@ class BeeFreeController extends Controller
 
     public function next(Request $request)
     {
-        Log::info('Next step initiated', ['user_id' => Auth::id()]);
+        Log::info('Next step initiated');
         try {
             $request->validate([
                 'template_id' => 'required|integer|exists:email_templates,id'
@@ -152,14 +137,11 @@ class BeeFreeController extends Controller
     public function showContinue($template)
     {
         Log::info('Rendering Continue page', [
-            'user_id' => Auth::id(),
             'template_id' => $template,
             'route' => 'continue'
         ]);
 
-        $templateData = EmailTemplate::with('content')
-            ->where('user_id', Auth::id())
-            ->find($template);
+        $templateData = EmailTemplate::with('content')->find($template);
 
         if (!$templateData) {
             Log::error('Template not found', ['template_id' => $template]);
@@ -178,7 +160,7 @@ class BeeFreeController extends Controller
             Log::info('Email scheduling request received');
 
             $validated = $request->validate([
-                'template_id' => 'required|integer|exists:email_templates,id,user_id,'.Auth::id(),
+                'template_id' => 'required|integer|exists:email_templates,id',
                 'recipients' => 'required|array|min:1',
                 'recipients.*' => 'required|email',
                 'scheduled_at' => 'required|date|after_or_equal:now',
@@ -186,11 +168,9 @@ class BeeFreeController extends Controller
             ]);
 
             $templateId = (int) $validated['template_id'];
-            $template = EmailTemplate::where('user_id', Auth::id())
-                ->findOrFail($templateId);
+            $template = EmailTemplate::findOrFail($templateId);
 
             Log::info('Dispatching email jobs', [
-                'user_id' => Auth::id(),
                 'template_id' => $template->id,
                 'job_count' => count($validated['recipients'])
             ]);
@@ -201,7 +181,7 @@ class BeeFreeController extends Controller
                     $templateId,
                     $template->name,
                     $request->subject ?? $template->subject ?? $template->name,
-                    Auth::user()
+                    null
                 )->delay(Carbon::parse($validated['scheduled_at']));
 
                 Log::debug('Job dispatched for recipient', [
@@ -232,16 +212,11 @@ class BeeFreeController extends Controller
         }
     }
 
-    // update title on dashboard
     public function update(Request $request, EmailTemplate $template)
     {
         $request->validate([
             'name' => 'required|string|max:255'
         ]);
-
-        if ($template->user_id !== Auth::id()) {
-            abort(403);
-        }
 
         $template->update([
             'name' => $request->name
@@ -250,28 +225,18 @@ class BeeFreeController extends Controller
         return response()->json(['success' => true]);
     }
 
-    // delete template
     public function destroy(EmailTemplate $template)
     {
-        if ($template->user_id !== Auth::id()) {
-            abort(403);
-        }
-
         $template->delete();
 
         return response()->json(['success' => true]);
     }
 
-    // update email subject
     public function updateSubject(Request $request, EmailTemplate $template)
     {
         $request->validate([
             'subject' => 'required|string|max:255'
         ]);
-
-        if ($template->user_id !== Auth::id()) {
-            abort(403);
-        }
 
         $template->update([
             'subject' => $request->subject

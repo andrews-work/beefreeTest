@@ -8,25 +8,22 @@ Route::get('/', function () {
     return Inertia::render('Welcome');
 })->name('home');
 
-Route::get('dashboard', [BeeFreeController::class, 'index'])->middleware('auth')->name('dashboard');
-Route::get('/beefree/data', [BeeFreeController::class, 'credentials'])->middleware('auth', 'throttle:60,1')->name('credentials');
-Route::post('/beefree/data/save', [BeeFreeController::class, 'save'])->middleware('auth')->name('save');
-Route::get('/beefree/data/check-template', [BeeFreeController::class, 'checkTemplate'])->middleware('auth')->name('check-template');
-Route::get('/email-templates', [BeeFreeController::class, 'listTemplates'])->middleware('auth');
+Route::get('dashboard', [BeeFreeController::class, 'index'])->name('dashboard');
+Route::get('/beefree/data', [BeeFreeController::class, 'credentials'])->middleware('throttle:60,1')->name('credentials');
+Route::post('/beefree/data/save', [BeeFreeController::class, 'save'])->name('save');
+Route::get('/beefree/data/check-template', [BeeFreeController::class, 'checkTemplate'])->name('check-template');
+Route::get('/email-templates', [BeeFreeController::class, 'listTemplates']);
 
-Route::post('/beefree/next', [BeeFreeController::class, 'next'])->middleware('auth')->name('next');
+Route::post('/beefree/next', [BeeFreeController::class, 'next'])->name('next');
 
-Route::get('continue/{template}', [BeeFreeController::class, 'showContinue'])
-    ->middleware('auth')
-    ->name('continue');
+Route::get('continue/{template}', [BeeFreeController::class, 'showContinue'])->name('continue');
 
-Route::post('/beefree/sendEmail' , [BeeFreeController::class, 'sendEmail'])->middleware('auth')->name('next');
+Route::post('/beefree/sendEmail', [BeeFreeController::class, 'sendEmail'])->name('next');
 
-Route::put('/email-templates/{template}', [BeeFreeController::class, 'update'])->middleware('auth');
-Route::delete('/email-templates/{template}', [BeeFreeController::class, 'destroy'])->middleware('auth');
-Route::put('/email-templates/{template}/subject', [BeeFreeController::class, 'updateSubject'])->middleware('auth');
+Route::put('/email-templates/{template}', [BeeFreeController::class, 'update']);
+Route::delete('/email-templates/{template}', [BeeFreeController::class, 'destroy']);
+Route::put('/email-templates/{template}/subject', [BeeFreeController::class, 'updateSubject']);
 
-
+// Leave out the auth routes
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';
-
